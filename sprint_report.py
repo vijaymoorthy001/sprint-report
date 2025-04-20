@@ -13,14 +13,10 @@ import pandas as pd
 from dateutil import parser as date_parser # More flexible date parsing
 import time
 import json
-import logging # Use logging for better output control
-import concurrent.futures
-from collections import defaultdict
 
-# --- Logging Setup ---
-- logging.basicConfig(level=print, format='%(asctime)s - %(levelname)s - %(message)s')
-+ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logging.getLogger("requests").setLevel(logging.WARNING) # Silence excessive requests logging
+# import logging  # Removed; using print statements for output
+# --- Logging Setup removed; using print statements instead ---
+
 logging.getLogger("urllib3").setLevel(logging.WARNING) # Silence excessive urllib3 logging
 
 
