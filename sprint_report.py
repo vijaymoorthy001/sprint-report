@@ -18,7 +18,8 @@ import concurrent.futures
 from collections import defaultdict
 
 # --- Logging Setup ---
-logging.basicConfig(level=print, format='%(asctime)s - %(levelname)s - %(message)s')
+- logging.basicConfig(level=print, format='%(asctime)s - %(levelname)s - %(message)s')
++ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger("requests").setLevel(logging.WARNING) # Silence excessive requests logging
 logging.getLogger("urllib3").setLevel(logging.WARNING) # Silence excessive urllib3 logging
 
