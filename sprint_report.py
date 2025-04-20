@@ -4,8 +4,6 @@
 import requests
 import base64
 import gspread
-# Use google.oauth2.service_account for credentials from dict/file
-# oauth2client is deprecated for service accounts in newer gspread versions
 from google.oauth2.service_account import Credentials
 from collections import defaultdict, Counter
 import datetime
@@ -20,7 +18,7 @@ import concurrent.futures
 from collections import defaultdict
 
 # --- Logging Setup ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=print, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger("requests").setLevel(logging.WARNING) # Silence excessive requests logging
 logging.getLogger("urllib3").setLevel(logging.WARNING) # Silence excessive urllib3 logging
 
@@ -33,7 +31,7 @@ JIRA_EMAIL = "" # The email used for the API Token
 JIRA_AUTH_TOKEN_BASE64 = "" # This IS the Base64 encoded value "email:api_token"
 
 # --- !!! IMPORTANT: Board ID !!! ---
-JIRA_BOARD_ID = 3802  # <<< REPLACE WITH YOUR BOARD ID if different
+JIRA_BOARD_ID = 0  # <<< REPLACE WITH YOUR BOARD ID if different
 
 # Sprint Configuration
 SPRINT_NAME = "" # Exact name
@@ -97,7 +95,7 @@ try:
     creds = Credentials.from_service_account_info(GSHEET_CREDENTIALS_DICT, scopes=SCOPES)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(GOOGLE_SHEET_KEY)
-    logging.info(f"Successfully connected to Google Sheet: {sh.title}")
+    print(f"Successfully connected to Google Sheet: {sh.title}")
 except Exception as e:
     logging.error(f"Error connecting to Google Sheets: {e}", exc_info=True)
     sys.exit(1)
@@ -139,14 +137,14 @@ def seconds_to_hours(seconds):
 
 def find_custom_field_id(field_name, jira_url, headers):
     """Finds the custom field ID for a given display name."""
-    logging.info(f"Attempting to find custom field ID for: '{field_name}'")
+    print(f"Attempting to find custom field ID for: '{field_name}'")
     url = f"{jira_url}/rest/api/3/field"
     fields_data = make_request("GET", url, headers=headers)
     if fields_data:
         for field in fields_data:
             if isinstance(field, dict) and field.get('name') == field_name and field.get('custom', False):
                 field_id = field['id']
-                logging.info(f"Found custom field ID: {field_id} for '{field_name}'")
+                print(f"Found custom field ID: {field_id} for '{field_name}'")
                 return field_id
     logging.error(f"Custom field ID not found for '{field_name}'. Check the exact name in Jira.")
     return field_name # Fallback
@@ -235,7 +233,7 @@ if not cf_epic_designation_id or not cf_epic_designation_id.startswith("customfi
      # Keep cf_epic_designation_id as the name for potential use later, but log the issue.
 
 # 1. Find the Sprint
-logging.info(f"Searching for Sprint '{SPRINT_NAME}' on board ID {JIRA_BOARD_ID}...")
+print(f"Searching for Sprint '{SPRINT_NAME}' on board ID {JIRA_BOARD_ID}...")
 target_sprint = None
 sprint_url = f"{JIRA_SERVER}/rest/agile/1.0/board/{JIRA_BOARD_ID}/sprint"
 sprint_params = {'state': 'active,future,closed'}
@@ -290,16 +288,16 @@ try:
 
 except Exception as e: logging.warning(f"Could not parse sprint dates for Tempo query: {e}")
 
-logging.info(f"Found Sprint: '{sprint_name_actual}' (ID: {sprint_id})")
-logging.info(f"Dates - Start: {sprint_start_date_fmt}, End: {sprint_end_date_fmt}, Days Remaining: {days_remaining}")
+print(f"Found Sprint: '{sprint_name_actual}' (ID: {sprint_id})")
+print(f"Dates - Start: {sprint_start_date_fmt}, End: {sprint_end_date_fmt}, Days Remaining: {days_remaining}")
 if sprint_start_date_tempo and sprint_end_date_tempo:
-    logging.info(f"Using date range for Tempo: {sprint_start_date_tempo} to {sprint_end_date_tempo}")
+    print(f"Using date range for Tempo: {sprint_start_date_tempo} to {sprint_end_date_tempo}")
 else:
     logging.warning("Could not determine a valid date range for Tempo query. Tempo logs will likely be skipped.")
 
 
 # 2. Get Sprint Issues
-logging.info(f"Fetching tickets for sprint ID {sprint_id}...")
+print(f"Fetching tickets for sprint ID {sprint_id}...")
 sprint_issues_raw = []
 issues_url = f"{JIRA_SERVER}/rest/agile/1.0/sprint/{sprint_id}/issue"
 # Ensure cf_epic_designation_id is included even if it's just the name fallback
@@ -322,7 +320,7 @@ while True:
         break
 
     sprint_issues_raw.extend(current_issues)
-    logging.info(f"Fetched {len(current_issues)} issues... (Total: {len(sprint_issues_raw)})")
+    print(f"Fetched {len(current_issues)} issues... (Total: {len(sprint_issues_raw)})")
 
     # Check pagination
     total_available = issues_data.get('total', 0) # Total issues Jira thinks are in the sprint
@@ -336,7 +334,7 @@ while True:
         issue_params['startAt'] = current_count # Set start for next page
     time.sleep(0.1) # Small delay between pages
 
-logging.info(f"Total issues fetched from Jira for sprint: {len(sprint_issues_raw)}")
+print(f"Total issues fetched from Jira for sprint: {len(sprint_issues_raw)}")
 
 # --- Data Processing ---
 processed_tickets = []
@@ -347,7 +345,7 @@ ticket_summaries = {}
 sprint_statuses = set() # Track all unique statuses encountered
 sprint_issue_keys = set() # Keep track of keys belonging to this sprint
 
-logging.info("Processing ticket data...")
+print("Processing ticket data...")
 for issue in sprint_issues_raw:
     if not isinstance(issue, dict): continue
     issue_key = issue.get('key')
@@ -416,7 +414,7 @@ all_sprint_statuses_sorted = sorted(list(sprint_statuses))
 parent_epic_designations = {}
 all_epic_designations = set() # Track unique designation values found
 if parent_keys_to_fetch:
-    logging.info(f"Fetching details for {len(parent_keys_to_fetch)} unique parent issues (potential Epics)...")
+    print(f"Fetching details for {len(parent_keys_to_fetch)} unique parent issues (potential Epics)...")
     parent_issue_url_base = f"{JIRA_SERVER}/rest/api/3/issue"
     # Request only summary and the specific custom field
     parent_fields = f"summary,{cf_epic_designation_id}"
@@ -458,7 +456,7 @@ if parent_keys_to_fetch:
                 logging.error(f"Error fetching parent details for key {key}: {exc}")
                 parent_epic_designations[key] = "Error Fetching Parent" # Indicate error
 
-logging.info("Mapping Epic Designations to tickets...")
+print("Mapping Epic Designations to tickets...")
 for ticket in processed_tickets:
     parent_key = ticket.get('parent_key')
     if parent_key in parent_epic_designations:
@@ -469,7 +467,7 @@ for ticket in processed_tickets:
              all_epic_designations.add(designation)
 
 # 4. Get Tempo Worklogs (Filtered by Sprint Tickets)
-logging.info("Fetching Tempo worklogs...")
+print("Fetching Tempo worklogs...")
 tempo_time_per_ticket_user = defaultdict(lambda: defaultdict(float)) # Stores {issue_key: {account_id: total_hours}}
 tempo_time_per_ticket_total = defaultdict(float) # Stores {issue_key: total_hours}
 issue_ids_from_tempo_logs = set() # Track Jira issue IDs found in Tempo logs
@@ -482,10 +480,10 @@ if assignee_account_ids and sprint_start_date_tempo and sprint_end_date_tempo:
 
     # Fetch logs per assignee found in the sprint issues
     # Consider fetching for *all* users if needed, but per-assignee is usually sufficient
-    logging.info(f"Fetching Tempo logs for {len(assignee_account_ids)} unique assignees found in sprint tickets...")
+    print(f"Fetching Tempo logs for {len(assignee_account_ids)} unique assignees found in sprint tickets...")
     for assignee_id in assignee_account_ids:
         display_name_for_log = accountid_to_displayname.get(assignee_id, assignee_id) # Use name if available
-        logging.info(f"Fetching Tempo logs for assignee: {display_name_for_log}")
+        print(f"Fetching Tempo logs for assignee: {display_name_for_log}")
         limit = 100000 # Max results per Tempo page (adjust if needed, 1000 is common)
         tempo_search_url = f"{TEMPO_SERVER}/worklogs/search?limit={limit}" # POST endpoint for search
         current_offset = 0
@@ -522,7 +520,7 @@ if assignee_account_ids and sprint_start_date_tempo and sprint_end_date_tempo:
                  if isinstance(issue_data, dict) and 'id' in issue_data:
                      issue_ids_from_tempo_logs.add(str(issue_data['id']))
 
-            logging.info(f"Fetched {new_logs_count} new Tempo logs for {display_name_for_log} (offset {current_offset})... (Total collected: {len(all_tempo_logs)})")
+            print(f"Fetched {new_logs_count} new Tempo logs for {display_name_for_log} (offset {current_offset})... (Total collected: {len(all_tempo_logs)})")
 
             # Pagination check (Tempo v4 often relies on fetched count vs limit)
             fetched_count_this_page = len(current_logs)
@@ -535,7 +533,7 @@ if assignee_account_ids and sprint_start_date_tempo and sprint_end_date_tempo:
     # Fetch Jira details for any issue IDs found in Tempo logs but not already cached
     issue_ids_needing_details = issue_ids_from_tempo_logs - set(JIRA_TICKETS.keys())
     if issue_ids_needing_details:
-         logging.info(f"Fetching Jira details for {len(issue_ids_needing_details)} additional issue IDs found in Tempo logs...")
+         print(f"Fetching Jira details for {len(issue_ids_needing_details)} additional issue IDs found in Tempo logs...")
          fetch_jira_ticket_details_concurrently(list(issue_ids_needing_details), JIRA_SERVER, JIRA_HEADERS)
          # Also try to get display names for authors of these logs if we don't have them
          authors_to_lookup = set()
@@ -550,7 +548,7 @@ if assignee_account_ids and sprint_start_date_tempo and sprint_end_date_tempo:
          # You might need a separate function/call to fetch user details by accountId if needed
          # For now, we rely on the names fetched during the main issue processing.
 
-    logging.info(f"Processing {len(all_tempo_logs)} collected Tempo worklogs...")
+    print(f"Processing {len(all_tempo_logs)} collected Tempo worklogs...")
     for log in all_tempo_logs:
         if not isinstance(log, dict): continue
         author_data = log.get('author'); issue_data = log.get('issue'); time_spent_seconds = log.get('timeSpentSeconds', 0)
@@ -593,7 +591,7 @@ else:
 # print("Tempo contributors per ticket (AccountID):", json.dumps({k: list(v) for k, v in tempo_contributors_per_ticket.items()})) # Convert set to list for printing
 
 # 5. Aggregate Data for Reporting
-logging.info("Aggregating data for report...")
+print("Aggregating data for report...")
 assignee_summary = defaultdict(lambda: {
     'ticket_count': 0, 'total_original_estimate': 0.0, 'total_time_spent_jira': 0.0,
     'epic_counts': Counter(), 'status_counts': Counter(), 'total_logged_tempo': 0.0,
@@ -795,7 +793,7 @@ for ticket in processed_tickets:
 df_problems = pd.DataFrame(problem_tickets_rows, columns=problem_tickets_header)
 
 # --- NEW: Ticket Dump DataFrame ---
-logging.info("Preparing ticket dump data...")
+print("Preparing ticket dump data...")
 ticket_dump_rows = []
 ticket_dump_header = ['Ticket Link', 'Assignee', 'Reporter', 'Original Estimate (h)', 'Time Spent (Jira, h)', 'Remaining Estimate (h)', 'Contributors in Current Sprint']
 
@@ -831,16 +829,16 @@ df_ticket_dump = pd.DataFrame(ticket_dump_rows, columns=ticket_dump_header)
 
 
 # --- Write to Google Sheet ---
-logging.info(f"Preparing worksheet: '{sprint_name_actual}'...")
+print(f"Preparing worksheet: '{sprint_name_actual}'...")
 try:
     # --- Delete existing worksheet if found ---
     try:
         worksheet_to_delete = sh.worksheet(sprint_name_actual)
         sh.del_worksheet(worksheet_to_delete)
-        logging.info(f"Deleted existing worksheet: '{sprint_name_actual}'")
+        print(f"Deleted existing worksheet: '{sprint_name_actual}'")
         time.sleep(2) # Pause
     except gspread.WorksheetNotFound:
-        logging.info(f"Worksheet '{sprint_name_actual}' not found. A new one will be created.")
+        print(f"Worksheet '{sprint_name_actual}' not found. A new one will be created.")
     except Exception as del_err:
         logging.warning(f"Error occurred while trying to delete worksheet '{sprint_name_actual}': {del_err}. Proceeding to create.")
         time.sleep(1)
@@ -870,7 +868,7 @@ try:
                         cols_summ, cols_attn, cols_prob, cols_dump, 2) + 20 # NEW: Include dump cols + buffer
 
     worksheet = sh.add_worksheet(title=sprint_name_actual, rows=required_rows, cols=required_cols)
-    logging.info(f"Created new worksheet: '{sprint_name_actual}' with {required_rows} rows and {required_cols} columns.")
+    print(f"Created new worksheet: '{sprint_name_actual}' with {required_rows} rows and {required_cols} columns.")
 
     current_row = 1 # Start writing at row 1
 
@@ -950,22 +948,22 @@ try:
             return start_row + 1 # Skip writing data
 
     # --- Write Sections ---
-    logging.info("Writing Sprint Details...")
+    print("Writing Sprint Details...")
     current_row = write_section_header("Sprint Details", current_row, cols_sprint or 2)
     current_row = write_dataframe(df_sprint_details, current_row, data_header_format)
     current_row += 1 # Add blank row
 
-    logging.info("Writing Assignee Capacity/Time Summary...")
+    print("Writing Assignee Capacity/Time Summary...")
     current_row = write_section_header("Assignee Summary: Capacity & Time", current_row, cols_cap or 2)
     current_row = write_dataframe(df_assignee_capacity_time, current_row, data_header_format)
     current_row += 1 # Add blank row
 
-    logging.info("Writing Assignee Epic Designation Summary...")
+    print("Writing Assignee Epic Designation Summary...")
     current_row = write_section_header("Assignee Summary: Epic Designation %", current_row, cols_epic or 2)
     current_row = write_dataframe(df_assignee_epics, current_row, data_header_format)
     current_row += 1 # Add blank row
 
-    logging.info("Writing Assignee Status % Summary...")
+    print("Writing Assignee Status % Summary...")
     status_percent_section_start_row = current_row
     current_row = write_section_header("Assignee Summary: Status %", current_row, cols_stat_pct or 2)
     status_percent_header_row = current_row
@@ -974,28 +972,28 @@ try:
     current_row = write_dataframe(df_assignee_statuses_percent, current_row, data_header_format)
     current_row += 1 # Add blank row
 
-    logging.info("Writing Assignee Remaining Hours by Status Summary...")
+    print("Writing Assignee Remaining Hours by Status Summary...")
     current_row = write_section_header("Assignee Summary: Remaining Hours by Status", current_row, cols_rem_hrs or 2)
     current_row = write_dataframe(df_assignee_remaining_hours, current_row, data_header_format)
     current_row += 1 # Add blank row
 
-    logging.info("Writing Overall Sprint Summary...")
+    print("Writing Overall Sprint Summary...")
     current_row = write_section_header("Overall Sprint Summary", current_row, cols_summ or 2)
     current_row = write_dataframe(df_summary, current_row, data_header_format)
     current_row += 1 # Add blank row
 
-    logging.info("Writing 'Needs Attention' section...")
+    print("Writing 'Needs Attention' section...")
     current_row = write_section_header("Needs Attention (Jira Logged > Estimate)", current_row, cols_attn or 2)
     current_row = write_dataframe(df_needs_attention, current_row, data_header_format)
     current_row += 1 # Add blank row
 
-    logging.info("Writing 'Tickets with Problems' section...")
+    print("Writing 'Tickets with Problems' section...")
     current_row = write_section_header("Tickets with Problems (Estimate/Description Issues)", current_row, cols_prob or 2)
     current_row = write_dataframe(df_problems, current_row, data_header_format)
     current_row += 1 # Add blank row
 
     # --- NEW: Write Ticket Dump Section ---
-    logging.info("Writing Ticket Dump section...")
+    print("Writing Ticket Dump section...")
     current_row = write_section_header("Sprint - Raw Data", current_row, cols_dump or 2)
     current_row = write_dataframe(df_ticket_dump, current_row, data_header_format)
     # No blank row needed at the very end
@@ -1003,7 +1001,7 @@ try:
 
 
     # --- Apply Specific Background Colors to Status PERCENTAGE DATA Columns ---
-    logging.info("Applying specific background colors to status PERCENTAGE DATA columns...")
+    print("Applying specific background colors to status PERCENTAGE DATA columns...")
     if not df_assignee_statuses_percent.empty and status_percent_data_start_row <= status_percent_data_end_row:
         status_cols_percent = df_assignee_statuses_percent.columns.tolist()
         for col_idx, col_name in enumerate(status_cols_percent):
@@ -1023,11 +1021,11 @@ try:
                 else:
                     logging.warning(f"Invalid hex color format for status '{col_name}': {hex_color}")
     else:
-        logging.info("Skipping status percentage column coloring as the section is empty or has no data rows.")
+        print("Skipping status percentage column coloring as the section is empty or has no data rows.")
     # --- End Apply Specific Background Colors ---
 
 
-    logging.info(f"Successfully populated new Google Sheet. Link: {sh.url}")
+    print(f"Successfully populated new Google Sheet. Link: {sh.url}")
 
 except gspread.exceptions.APIError as ge:
      # Try to get more details from the API error response
@@ -1039,4 +1037,4 @@ except gspread.exceptions.GSpreadException as gse:
 except Exception as e:
     logging.error(f"An unexpected error occurred during sheet operations: {e}", exc_info=True)
 
-logging.info("Script finished.")
+print("Script finished.")
